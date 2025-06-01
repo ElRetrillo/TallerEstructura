@@ -1,0 +1,40 @@
+#ifndef CONFIGURACION_JUEGO_H
+#define CONFIGURACION_JUEGO_H
+
+const int TAMANO_TABLERO = 8;
+const char VACIO = '.';
+const char JUGADOR_X = 'X'; 
+const char JUGADOR_O = 'O'; 
+
+enum EstadoJuego {
+    EN_CURSO,
+    JUGADOR_X_GANO,
+    JUGADOR_O_GANO,
+    EMPATE
+};
+
+enum ModoJugador {
+    HUMANO_VS_HUMANO
+};
+
+const int OFFSET_GUI_TABLERO_X = 50;
+const int OFFSET_GUI_TABLERO_Y = 50;
+const int TAMANO_CELDA = 70;
+const int ANCHO_VENTANA = OFFSET_GUI_TABLERO_X * 2 + TAMANO_TABLERO * TAMANO_CELDA;
+const int ALTO_VENTANA = OFFSET_GUI_TABLERO_Y * 2 + TAMANO_TABLERO * TAMANO_CELDA + 200; 
+
+const int MARGEN_BOTONES_HABILIDAD_X = 20; 
+
+enum EstadoGUI {
+    MENU_PRINCIPAL,
+    JUGANDO,
+    PANTALLA_FIN_JUEGO
+};
+
+enum EstadoHabilidad {
+    NINGUNA_HABILIDAD,
+    MODO_FICHA_FANTASMA,
+    MODO_INTERCAMBIO_COLOR
+};
+
+#endif
