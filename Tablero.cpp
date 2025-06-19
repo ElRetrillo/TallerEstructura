@@ -1,12 +1,13 @@
 #include "Tablero.h"
 #include "ConfiguracionJuego.h" 
+#include "TablaTransposicion.h" 
 
 Tablero::Tablero() : tablero(TAMANO_TABLERO, std::vector<char>(TAMANO_TABLERO, VACIO)) {
     inicializar_tablero();
+    hash_actual = calcular_hash_zobrist(); 
 }
 
-Tablero::Tablero(const Tablero& otro) : tablero(otro.tablero) {
-}
+Tablero::Tablero(const Tablero& otro) : tablero(otro.tablero), hash_actual(otro.hash_actual) {}
 
 void Tablero::inicializar_tablero() {
     tablero[3][3] = JUGADOR_O;
@@ -28,6 +29,20 @@ void Tablero::mostrar_tablero() const {
         }
         std::cout << std::endl;
     }
+}
+
+unsigned long long Tablero::calcular_hash_zobrist() const {
+    unsigned long long hash = 0;
+    for (int fila = 0; fila < TAMANO_TABLERO; ++fila) {
+        for (int columna = 0; columna < TAMANO_TABLERO; ++columna) {
+            if (tablero[fila][columna] == JUGADOR_X) {
+                hash ^= TABLA_ZOBRIST[fila][columna][0];
+            } else if (tablero[fila][columna] == JUGADOR_O) {
+                hash ^= TABLA_ZOBRIST[fila][columna][1];
+            }
+        }
+    }
+    return hash;
 }
 
 std::vector<std::pair<int, int>> Tablero::obtener_fichas_a_voltear(int fila, int columna, char jugador) const {
@@ -66,7 +81,7 @@ bool Tablero::es_movimiento_valido(int fila, int columna, char jugador) const {
 }
 
 bool Tablero::realizar_movimiento(int fila, int columna, char jugador) {
-    std::vector<std::pair<int, int>> a_voltear = obtener_fichas_a_voltear(fila, columna, jugador);
+    std::vector<std::pair<int, int>> a_voltear = obtener_fichas_a_voltear(fila, columna, jugador); 
 
     if (a_voltear.empty()) {
         return false;
@@ -76,6 +91,7 @@ bool Tablero::realizar_movimiento(int fila, int columna, char jugador) {
     for (const auto& p : a_voltear) {
         tablero[p.first][p.second] = jugador;
     }
+    hash_actual = calcular_hash_zobrist(); 
     return true;
 }
 
