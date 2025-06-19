@@ -3,20 +3,23 @@
 #include <limits>
 #include <string>
 
-GestorJuego::GestorJuego() :
+GestorJuego::GestorJuego(int profundidad_ia) :
     jugador_actual(JUGADOR_X),
+    agente_ia(profundidad_ia), 
     estado_juego(EN_CURSO),
-    modo_actual(HUMANO_VS_HUMANO), 
+    modo_actual(HUMANO_VS_IA), 
     jugador_x_puede_intercambiar_color(true),
     jugador_o_puede_intercambiar_color(true),
     puntos_esquina_jugador_x(0),
-    puntos_esquina_jugador_o(0)
+    puntos_esquina_jugador_o(0),
+    energia_jugador_x(0),
+    energia_jugador_o(0)
 {
     historial.push(tablero); 
 }
 
 void GestorJuego::establecer_modo_jugador(ModoJugador modo) {
-    modo_actual = HUMANO_VS_HUMANO; 
+    modo_actual = modo; 
     reiniciar_juego();
 }
 
@@ -25,12 +28,14 @@ bool GestorJuego::intentar_mover_jugador(int fila, int columna) {
         return false;
     }
 
-    if (jugador_actual == JUGADOR_X || jugador_actual == JUGADOR_O) {
+    if (jugador_actual == JUGADOR_X || (jugador_actual == JUGADOR_O && modo_actual == HUMANO_VS_HUMANO)) {
         if (fila >= 0 && fila < TAMANO_TABLERO && columna >= 0 && columna < TAMANO_TABLERO) {
-            if (tablero.es_movimiento_valido(fila, columna, jugador_actual)) {
+            std::vector<std::pair<int, int>> fichas_volteadas_por_mov = tablero.obtener_fichas_a_voltear(fila, columna, jugador_actual);
+            if (!fichas_volteadas_por_mov.empty()) {
                 historial.push(tablero);
                 tablero.realizar_movimiento(fila, columna, jugador_actual);
-                verificar_dominacion_esquinas(jugador_actual);
+                ganar_energia_por_volteo(jugador_actual, fichas_volteadas_por_mov.size());
+                verificar_dominacion_esquinas(jugador_actual); 
                 actualizar_estado_juego();
 
                 if (estado_juego == EN_CURSO) {
@@ -41,6 +46,30 @@ bool GestorJuego::intentar_mover_jugador(int fila, int columna) {
         }
     }
     return false;
+}
+
+void GestorJuego::procesar_turno_ia() {
+    if (estado_juego != EN_CURSO || jugador_actual != JUGADOR_O || modo_actual != HUMANO_VS_IA) {
+        return;
+    }
+
+    std::cout << "La IA está pensando..." << std::endl;
+    Movimiento mejor_movimiento = agente_ia.encontrar_mejor_movimiento(*this, jugador_actual);
+
+    if (mejor_movimiento.fila != -1) {
+        std::vector<std::pair<int, int>> fichas_volteadas_por_mov = tablero.obtener_fichas_a_voltear(mejor_movimiento.fila, mejor_movimiento.columna, jugador_actual);
+        tablero.realizar_movimiento(mejor_movimiento.fila, mejor_movimiento.columna, jugador_actual);
+        ganar_energia_por_volteo(jugador_actual, fichas_volteadas_por_mov.size());
+        verificar_dominacion_esquinas(jugador_actual); 
+        std::cout << "La IA juega en: " << mejor_movimiento.fila + 1 << " " << mejor_movimiento.columna + 1 << std::endl;
+    } else {
+        std::cout << "La IA no tiene movimientos validos." << std::endl;
+    }
+    actualizar_estado_juego();
+
+    if (estado_juego == EN_CURSO) {
+        cambiar_turno();
+    }
 }
 
 void GestorJuego::cambiar_turno() {
@@ -88,6 +117,8 @@ void GestorJuego::reiniciar_juego() {
     jugador_o_puede_intercambiar_color = true;
     puntos_esquina_jugador_x = 0;
     puntos_esquina_jugador_o = 0;
+    energia_jugador_x = 0;
+    energia_jugador_o = 0;
 }
 
 char GestorJuego::obtener_jugador_actual() const {
@@ -99,14 +130,18 @@ EstadoJuego GestorJuego::obtener_estado_juego() const {
 }
 
 ModoJugador GestorJuego::obtener_modo_jugador() const {
-    return HUMANO_VS_HUMANO; 
+    return modo_actual;
 }
 
 std::string GestorJuego::obtener_nombre_jugador(char caracter_jugador) const {
     if (caracter_jugador == JUGADOR_X) {
         return "Jugador 1 (Negro)";
     } else {
-        return "Jugador 2 (Blanco)";
+        if (modo_actual == HUMANO_VS_IA) {
+            return "IA (Blanco)";
+        } else {
+            return "Jugador 2 (Blanco)";
+        }
     }
 }
 
@@ -125,10 +160,15 @@ bool GestorJuego::realizar_intercambio_color(int fila, int columna, char jugador
     char oponente = (jugador == JUGADOR_X) ? JUGADOR_O : JUGADOR_X;
     if (tablero.tablero[fila][columna] == oponente) {
         tablero.tablero[fila][columna] = jugador;
+        tablero.hash_actual = tablero.calcular_hash_zobrist();
         historial.push(tablero);
         return true;
     }
     return false;
+}
+
+void GestorJuego::verificar_dominacion_esquinas_publica(char jugador) {
+    verificar_dominacion_esquinas(jugador);
 }
 
 void GestorJuego::verificar_dominacion_esquinas(char jugador) {
@@ -149,4 +189,38 @@ void GestorJuego::verificar_dominacion_esquinas(char jugador) {
     }
     puntos_esquina_jugador_x = actuales_esquinas_x;
     puntos_esquina_jugador_o = actuales_esquinas_o;
+}
+
+int GestorJuego::obtener_energia(char jugador) const {
+    if (jugador == JUGADOR_X) return energia_jugador_x;
+    if (jugador == JUGADOR_O) return energia_jugador_o;
+    return 0;
+}
+
+bool GestorJuego::puede_comprar_habilidad(char jugador, int costo) const {
+    if (jugador == JUGADOR_X) return energia_jugador_x >= costo;
+    if (jugador == JUGADOR_O) return energia_jugador_o >= costo;
+    return false;
+}
+
+void GestorJuego::gastar_energia(char jugador, int costo) {
+    if (jugador == JUGADOR_X) energia_jugador_x -= costo;
+    if (jugador == JUGADOR_O) energia_jugador_o -= costo;
+}
+
+void GestorJuego::ganar_energia_por_volteo(char jugador, int fichas_volteadas) {
+    int energia_ganada = fichas_volteadas * RECURSO_POR_FICHA_VOLTEADA;
+    if (jugador == JUGADOR_X) energia_jugador_x += energia_ganada;
+    if (jugador == JUGADOR_O) energia_jugador_o += energia_ganada;
+}
+
+bool GestorJuego::realizar_volteo_forzado(int fila, int columna, char jugador) {
+    char oponente = (jugador == JUGADOR_X) ? JUGADOR_O : JUGADOR_X;
+    if (fila >= 0 && fila < TAMANO_TABLERO && columna >= 0 && columna < TAMANO_TABLERO && tablero.tablero[fila][columna] == oponente) {
+        tablero.tablero[fila][columna] = jugador;
+        tablero.hash_actual = tablero.calcular_hash_zobrist();
+        historial.push(tablero);
+        return true;
+    }
+    return false;
 }
